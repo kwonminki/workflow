@@ -1,5 +1,6 @@
 """Local/trusted-LAN HTTP interface (loopback by default). Browser never submits shell commands."""
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -7,14 +8,14 @@ from .store import Store, Conflict
 from .bridge import Bridge
 
 ASSETS = {'/': ('index.html', 'text/html'), '/app.js': ('app.js', 'text/javascript'),
-          '/style.css': ('style.css', 'text/css'), '/session-bridge.js': ('session-bridge.js', 'text/javascript')}
+          '/style.css': ('style.css', 'text/css'), '/session-bridge.js': ('session-bridge.js', 'text/javascript'), '/session-bridge.css': ('session-bridge.css','text/css')}
 WEB_ACTIONS = {'node', 'comment', 'followup', 'read'}
 
 
 def make_server(store, port, host="127.0.0.1"):
     import ipaddress
     if host != "localhost": ipaddress.ip_address(host)
-    bridge = Bridge()
+    bridge = Bridge(os.environ.get('WORKFLOW_BRIDGE_CONFIG') or store.directory/'bridge.json')
     class Handler(BaseHTTPRequestHandler):
         def host_ok(self):
             addresses = {'127.0.0.1', 'localhost', getattr(self.server, 'server_address', ('127.0.0.1',))[0]}
@@ -55,7 +56,7 @@ def make_server(store, port, host="127.0.0.1"):
             origin = self.headers.get('Origin')
             if origin != 'http://' + self.headers['Host']:
                 return self.send(403, {'error': 'same-origin browser request required; use CLI for automation'})
-            if self.path not in ('/api/action','/api/session-bridge'):
+            if self.path not in ('/api/action','/api/session-bridge','/api/session-bridge/control'):
                 return self.send(404, {'error': 'not found'})
             if self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
                 return self.send(415, {'error': 'application/json required'})
@@ -64,6 +65,8 @@ def make_server(store, port, host="127.0.0.1"):
                 if not 0 < size <= 262144:
                     return self.send(413, {'error': 'request body too large or missing'})
                 request = json.loads(self.rfile.read(size))
+                if self.path == '/api/session-bridge/control':
+                    return self.send(200, bridge.control(request))
                 if self.path == '/api/session-bridge':
                     return self.send(200, bridge.enqueue(request))
                 if not isinstance(request, dict) or request.get('action') not in WEB_ACTIONS:
@@ -78,7 +81,10 @@ def make_server(store, port, host="127.0.0.1"):
 
         def log_message(self, *_args):
             pass
-    return ThreadingHTTPServer((host, port), Handler)
+    server = ThreadingHTTPServer((host, port), Handler)
+    bootstrap_host = '127.0.0.1' if host=='0.0.0.0' else host
+    bridge.prepare(f'http://{bootstrap_host}:{server.server_port}')
+    return server
 
 
 def serve(directory, port, host="127.0.0.1"):

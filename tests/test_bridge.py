@@ -81,6 +81,81 @@ class BridgeTests(unittest.TestCase):
         with patch('workflow.bridge.urlopen',side_effect=OSError()):self.b.tick()
         self.assertEqual(len(self.state()['active']),1);self.assertTrue(self.state()['source_error'])
 
+    def test_additional_message_exact_and_distinct_requests(self):
+        self.b.enqueue(dict(self.payload(),message='첫째\n둘째 <script>'))
+        self.b.enqueue(dict(self.payload('request-0002'),message='다른 내용'))
+        self.assertEqual(len(self.state()['requests']),2)
+        with self.assertRaises(ValueError):self.b.enqueue(dict(self.payload(),message='수정'))
+        self.b.tick(self.source());self.assertIn('첫째\n둘째 <script>',self.calls[0])
+        self.b.tick(self.source());self.assertIn('다른 내용',self.calls[1])
+        with self.assertRaises(ValueError):self.b.enqueue(dict(self.payload('request-0003'),message='x'*4001))
+
+    def test_discord_off_does_not_disable_session_or_catch_up(self):
+        self.b.tick(self.source())
+        self.b.control({'action':'discord_toggle','on':False})
+        self.assertFalse(Bridge(self.path).status()['discord_on'])
+        self.b.enqueue(self.payload());self.b.tick(self.source(title='off change'))
+        self.assertEqual(len(self.calls),1);self.assertFalse(self.state()['notices'])
+        self.b.control({'action':'discord_toggle','on':True})
+        self.b.tick(self.source(title='off change'));self.assertFalse(self.state()['notices'])
+        self.b.tick(self.source(title='new after on'));self.assertEqual(len(self.state()['notices']),1)
+
+    def test_off_cancels_queued_discord_retry(self):
+        self.b.tick(self.source())
+        def fail(*args):raise RuntimeError('Discord HTTP 503')
+        self.b.discord=fail;self.b.tick(self.source(title='change'))
+        self.assertEqual(self.state()['notices'][0]['status'],'pending')
+        self.b.control({'action':'discord_toggle','on':False})
+        self.assertEqual(self.state()['notices'][0]['status'],'cancelled')
+
+    def test_control_rejects_executables_and_invalid_values(self):
+        for payload in [{'action':'connect_session','session_id':'x','command':'sh'},
+                        {'action':'discord_toggle','on':'false'}, {'action':'connect_session','session_id':'/tmp/file'},
+                        {'action':'connect_discord','thread_url':'https://evil.invalid/123'}, {'action':'anything'}]:
+            with self.assertRaises(ValueError):self.b.control(payload)
+
+    def test_session_connect_validates_and_preserves_old_pending_target(self):
+        self.b.enqueue(self.payload());sid='00000000-0000-0000-0000-000000000001'
+        self.b.adapter=lambda *a:{'status':'failed'}
+        with self.assertRaises(ValueError):self.b.control({'action':'connect_session','session_id':sid})
+        self.assertEqual(self.b.config()['session_id'],'session-a')
+        self.b.adapter=lambda *a:{'status':'ready'}
+        result=self.b.control({'action':'connect_session','session_id':sid})
+        self.assertEqual(result['session_id'],sid);self.assertEqual(result['session_check']['status'],'ready')
+        self.b.tick(self.source());self.assertEqual(self.state()['requests'][0]['status'],'failed')
+
+    def test_discord_connection_checks_guild_type_and_preserves_off(self):
+        guild='123456789012345678';thread='223456789012345678'
+        config=Path(self.tmp.name)/'connector.json';write_json(config,{'discord':{'guildId':guild}})
+        c=self.b.config();c['connector_config']=str(config);write_json(self.path,c)
+        self.b.discord=lambda c,m,r,body=None: {'guild_id':guild,'type':0} if r=='/channels/'+thread else []
+        with self.assertRaises(ValueError):self.b.control({'action':'connect_discord','thread_url':f'https://discord.com/channels/{guild}/{thread}'})
+        self.b.discord=lambda c,m,r,body=None: {'guild_id':guild,'type':11} if r=='/channels/'+thread else []
+        result=self.b.control({'action':'connect_discord','thread_url':f'https://discord.com/channels/{guild}/{thread}'})
+        self.assertTrue(result['discord_configured']);self.assertFalse(result['discord_on'])
+        with self.assertRaises(ValueError):self.b.control({'action':'connect_discord','thread_url':f'https://discord.com/channels/923456789012345678/{thread}'})
+
+    def test_switch_while_polling_cannot_send_to_new_destination(self):
+        self.b.tick(self.source())
+        def fail(*args):raise RuntimeError('Discord HTTP 503')
+        self.b.discord=fail;self.b.tick(self.source(title='change'))
+        with self.b.locked() as s:s['notices'][0]['retry_at']=0
+        c=self.b.config();c['thread_id']='456';write_json(self.path,c)
+        self.b.discord=lambda *a:self.fail('old notice cannot be redirected')
+        self.b.tick(self.source(title='change'))
+
+    def test_optional_bootstrap_has_no_token_or_connected_destinations(self):
+        root=Path(self.tmp.name)/'connector';(root/'.connect').mkdir(parents=True)
+        write_json(root/'.connect/config.json',{'discord':{'token':'synthetic-fixture-only'},'direct':{'orca':{'command':'/fixed/orca'}}})
+        path=Path(self.tmp.name)/'new-workspace/bridge.json';b=Bridge(path)
+        with patch.dict('os.environ',{'WORKFLOW_CONNECTOR_ROOT':str(root),'WORKFLOW_PUBLIC_URL':'http://192.168.1.20:18743'}):
+            b.prepare('http://127.0.0.1:18743')
+        c=b.config();self.assertIsNone(c['session_id']);self.assertFalse(c['discord_enabled'])
+        self.assertEqual(c['base_url'],'http://192.168.1.20:18743');self.assertNotIn('synthetic-fixture-only',path.read_text())
+        self.assertNotIn('connector_root',b.status())
+        with patch.dict('os.environ',{'WORKFLOW_CONNECTOR_ROOT':str(root)}):b.prepare('http://127.0.0.1:9999')
+        self.assertEqual(b.config(),c)
+
 if __name__=='__main__':unittest.main()
 
 class BridgeHTTPTests(unittest.TestCase):
@@ -109,5 +184,10 @@ class BridgeHTTPTests(unittest.TestCase):
                 with self.assertRaises(HTTPError):urlopen(Request(base+'/api/session-bridge',headers={'Host':'evil.invalid'}))
                 with urlopen(Request(base+'/api/session-bridge',data=body,headers={'Content-Type':'application/json','Origin':base})) as r:
                     self.assertEqual(json.load(r)['status'],'queued')
+                with urlopen(Request(base+'/api/session-bridge/control',data=json.dumps({'action':'discord_toggle','on':False}).encode(),headers={'Content-Type':'application/json','Origin':base})) as r:
+                    self.assertFalse(json.load(r)['discord_on'])
+                with self.assertRaises(HTTPError) as err:
+                    urlopen(Request(base+'/api/session-bridge/control',data=b'{"action":"discord_toggle","on":false}',headers={'Content-Type':'application/json','Origin':'http://evil.invalid'}))
+                self.assertEqual(err.exception.code,403)
                 self.assertEqual(store.read(),before)
             finally:server.shutdown();server.server_close();thread.join()

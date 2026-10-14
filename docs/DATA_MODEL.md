@@ -31,4 +31,6 @@ ID는 영문·숫자·`_`·`-`만 사용합니다. 우선순위는 정수 0~100�
 
 ## 선택 세션 전달 API
 
-`GET /api/session-bridge`는 연결/최근 요청 상태를, `POST /api/session-bridge`는 `request_id`, 상대 `page`, `title`만 받아 outbox를 만듭니다. 같은 Origin/Host 검사 후 처리하며 브라우저에서 세션이나 명령을 지정하지 않습니다. 이 저장소의 핵심 `state.json` revision과 분리된 비공개 영수증입니다. 상세는 [SESSION_BRIDGE.md](SESSION_BRIDGE.md)를 따릅니다.
+`GET /api/session-bridge`는 연결/최근 요청 상태를, `POST /api/session-bridge`는 `request_id`, 상대 `page`, `title`, 선택 `message`(최대4000자)를 받아 outbox를 만듭니다. 같은 Origin/Host 검사 후 처리하며 전송 본문에는 명령이나 목적 세션을 넣지 않으며 연결 API로 검증한 설정을 사용합니다. 이 저장소의 핵심 `state.json` revision과 분리된 비공개 영수증입니다. 상세는 [SESSION_BRIDGE.md](SESSION_BRIDGE.md)를 따릅니다.
+
+`POST /api/session-bridge/control`은 `sessions`, `check_session`, `connect_session(session_id)`, `connect_discord(thread_url)`, `discord_toggle(on)`만 허용합니다. 기존 Origin/Host 검사를 적용하며 실행 경로/임의 명령/봇 토큰 설정은 브라우저에서 허용하지 않습니다. 세션 소유 프로세스 및 Discord 서버/스레드 검증 후 설정을 저장합니다. `GET` 상태에는 `session_configured`, `session_check`, `discord_configured`, `discord_on`이 추가됩니다.

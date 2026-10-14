@@ -1,3 +1,12 @@
+## 2026-10-14 · 연결 관리 UI 후속 개선
+
+- Python 47개 검사 통과: 기존 검사와 추가 메시지 독립 보존, 세션 변경 검증, Discord 서버/스레드 검증, OFF 후 재시도 취소·재활성화 시 과거 알림 억제, 브라우저 설정 필드 제한, 선택 초기 설정을 포함합니다.
+- 별도 Chromium 연결 UI 시나리오 13개 통과. 미연결 화면, 요청문 복사, 직접 세션 선택, 추가 메시지 전달, Discord 직접 연결·ON/OFF·새로고침 후 유지, 에이전트 요청문 준비, 모바일 폭을 합성 Connector와 임시 workspace로 검증했습니다.
+- 실제 배포 웹: 기존 메인 세션 연결 확인, 실행 중인 세션 3개 조회, Discord 기존 ON 보존, 창/드롭다운 열기만으로 새 전송 요청 0건, 390px 가로 넘침 0, JS 오류 0. 실제 댓글/읽음 변경 0건. 연결 UI 시험을 위해 기존 사용자 세션으로 새 시험 메시지를 보내지 않았습니다.
+- 재현: `CHROME_BINARY=/path/to/chrome WORKFLOW_BROWSER_OUTPUT=/tmp/bridge-ui node tests/bridge-browser.mjs`. 테스트의 Connector/session 전달은 합성 대체 구현이고, 원격 Discord/Orca 실제 전달 검증은 아래 이전 배포 기록과 구분합니다.
+
+---
+
 ## 2026-10-14 · Discord/Orca 선택 연동과 내부망 포트
 
 - Python 39개 검사 통과: outbox 중복·세션 교체·전송 중단·실패 재시도·Discord 수신 영수증 복구·초기 기준·재검토·댓글 상태 보존, HTTP Origin/Host 거부·0.0.0.0 바인딩·임의 빈 포트 포함.

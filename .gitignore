@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.workflow-data/
+demo-workspace/
+.local/
+.env
+.env.*
+!.env.example

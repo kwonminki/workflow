@@ -1,0 +1,11 @@
+{
+  "node_id": "implementation",
+  "summary": "사후 실행 보고 예제 — 실제 사실로 교체할 것",
+  "cwd": "/path/to/your/project",
+  "command": ["python3", "validate.py", "--input", "input.json"],
+  "inputs": ["/path/to/your/project/input.json"],
+  "outputs": ["/path/to/your/project/result.json"],
+  "validation": "검증한 조건과 실패/미검증 범위를 적습니다.",
+  "result": "측정한 수치와 판단을 적습니다.",
+  "evidence": ["/path/to/your/project/result.json"]
+}

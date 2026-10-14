@@ -1,0 +1,11 @@
+{
+  "id": "followup-validation",
+  "title": "후속 입력 검증",
+  "group": "검증",
+  "goal": "사용자 의견에서 제기한 경계 조건을 확인한다.",
+  "next_action": "확정된 계약을 기준으로 작은 반례와 정상 입력을 비교한다.",
+  "status": "planned",
+  "owner": "worker",
+  "depends_on": ["implementation"],
+  "priority": 30
+}

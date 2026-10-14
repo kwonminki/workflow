@@ -16,7 +16,7 @@ function badge(status){return $('span',statusNames[status]||status,'badge status
 function nodeCard(node){const c=card(node.title,node.goal);c.append(badge(node.status),$('p',node.next_action,'muted'),btn('상세·수정·메모',()=>nodeDetail(node.id)));return c;}
 function notifications(){return state.threads.flatMap(thread=>thread.messages.filter(m=>m.kind==='agent').map(message=>({thread,message}))).sort((a,b)=>b.message.created_at.localeCompare(a.message.created_at));}
 function render(){const [page,encodedId]=(location.hash.slice(1)||'home').split('/');let id;try{id=encodedId?decodeURIComponent(encodedId):undefined;}catch{heading('잘못된 주소');return;}document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+page));
- if(page==='graph')return graph();if(page==='documents')return documents();if(page==='document')return documentPage(id);if(page==='runs')return runs();if(page==='notifications')return inbox();
+ if(page==='graph'){graph();if(id&&find(state.nodes,id))nodeDetail(id);return;}if(page==='documents')return documents();if(page==='document')return documentPage(id);if(page==='runs')return runs();if(page==='notifications')return inbox();
  heading('지금 확인');view.append($('p','확인 필요로 지정한 작업만 모읍니다. 모든 자료가 검수 요청이 되는 것은 아닙니다.','muted'));
  const grid=$('div',undefined,'grid');state.nodes.filter(n=>n.status==='review').sort((a,b)=>a.priority-b.priority).forEach(n=>grid.append(nodeCard(n)));view.append(grid);
  if(!grid.children.length)view.append($('p','현재 사용자 확인 요청이 없습니다.','blank'));

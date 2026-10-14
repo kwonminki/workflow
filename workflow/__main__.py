@@ -35,7 +35,7 @@ def main(argv=None):
     parser.add_argument('--data', default=os.environ.get('WORKFLOW_DATA', '.workflow-data'))
     subs = parser.add_subparsers(dest='command', required=True)
     init = subs.add_parser('init'); init.add_argument('--title', default='My project'); init.add_argument('--demo', action='store_true')
-    web = subs.add_parser('serve'); web.add_argument('--port', type=int, default=8040)
+    web = subs.add_parser('serve'); web.add_argument('--port', type=int, default=8040); web.add_argument('--host', default='127.0.0.1', help='Bind IP; use a trusted LAN IP for direct access; --port 0 chooses a free port')
     subs.add_parser('state')
     inbox = subs.add_parser('inbox'); inbox.add_argument('--require-clear', action='store_true'); inbox.add_argument('--owner')
     change = subs.add_parser('apply', help='Apply a JSON action from a file or stdin (-)')
@@ -56,7 +56,7 @@ def main(argv=None):
                 populate(store)
             emit({'workspace': str(store.directory.resolve()), 'revision': store.read()['revision']})
         elif args.command == 'serve':
-            serve(args.data, args.port)
+            serve(args.data, args.port, args.host)
         elif args.command == 'state':
             emit(store.read())
         elif args.command == 'inbox':

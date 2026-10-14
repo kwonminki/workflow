@@ -28,3 +28,7 @@ ID는 영문·숫자·`_`·`-`만 사용합니다. 우선순위는 정수 0~100�
 - 정적 파일은 `/`, `/app.js`, `/style.css`만 허용합니다. 작업 데이터나 임의 파일을 URL 경로로 열지 않습니다.
 
 로컬 CLI는 신뢰된 사용자 권한으로 실행되며 암호학적인 작성자 인증/변조 방지 장치가 아닙니다. state 파일에 접근 가능한 사용자는 내용을 바꿀 수 있습니다. 원자적 rename과 POSIX lock은 단일 호스트 로컬 디스크를 전제로 합니다. 전체 JSON 재작성 방식이라 대규모 이력/멀티 사용자 운영 전 별도 저장 계층이 필요합니다.
+
+## 선택 세션 전달 API
+
+`GET /api/session-bridge`는 연결/최근 요청 상태를, `POST /api/session-bridge`는 `request_id`, 상대 `page`, `title`만 받아 outbox를 만듭니다. 같은 Origin/Host 검사 후 처리하며 브라우저에서 세션이나 명령을 지정하지 않습니다. 이 저장소의 핵심 `state.json` revision과 분리된 비공개 영수증입니다. 상세는 [SESSION_BRIDGE.md](SESSION_BRIDGE.md)를 따릅니다.

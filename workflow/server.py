@@ -1,19 +1,27 @@
-"""Loopback-only HTTP interface. Browser never submits shell commands."""
+"""Local/trusted-LAN HTTP interface (loopback by default). Browser never submits shell commands."""
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 from .store import Store, Conflict
+from .bridge import Bridge
 
 ASSETS = {'/': ('index.html', 'text/html'), '/app.js': ('app.js', 'text/javascript'),
-          '/style.css': ('style.css', 'text/css')}
+          '/style.css': ('style.css', 'text/css'), '/session-bridge.js': ('session-bridge.js', 'text/javascript')}
 WEB_ACTIONS = {'node', 'comment', 'followup', 'read'}
 
 
-def make_server(store, port):
+def make_server(store, port, host="127.0.0.1"):
+    import ipaddress
+    if host != "localhost": ipaddress.ip_address(host)
+    bridge = Bridge()
     class Handler(BaseHTTPRequestHandler):
         def host_ok(self):
-            return self.headers.get('Host') in {f'127.0.0.1:{self.server.server_port}', f'localhost:{self.server.server_port}'}
+            addresses = {'127.0.0.1', 'localhost', getattr(self.server, 'server_address', ('127.0.0.1',))[0]}
+            try: addresses.add(self.connection.getsockname()[0])
+            except AttributeError: pass
+            addresses.discard('0.0.0.0')
+            return self.headers.get('Host') in {f'{a}:{self.server.server_port}' for a in addresses}
 
         def send(self, code, body, mime='application/json'):
             if mime == 'application/json':
@@ -31,6 +39,9 @@ def make_server(store, port):
             if not self.host_ok():
                 return self.send(403, {'error': 'unexpected Host'})
             path = urlparse(self.path).path
+            if path == '/api/session-bridge':
+                from urllib.parse import parse_qs
+                return self.send(200, bridge.status(parse_qs(urlparse(self.path).query).get('request_id',[None])[0]))
             if path == '/api/state':
                 return self.send(200, store.read())
             if path in ASSETS:
@@ -44,7 +55,7 @@ def make_server(store, port):
             origin = self.headers.get('Origin')
             if origin != 'http://' + self.headers['Host']:
                 return self.send(403, {'error': 'same-origin browser request required; use CLI for automation'})
-            if self.path != '/api/action':
+            if self.path not in ('/api/action','/api/session-bridge'):
                 return self.send(404, {'error': 'not found'})
             if self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
                 return self.send(415, {'error': 'application/json required'})
@@ -53,6 +64,8 @@ def make_server(store, port):
                 if not 0 < size <= 262144:
                     return self.send(413, {'error': 'request body too large or missing'})
                 request = json.loads(self.rfile.read(size))
+                if self.path == '/api/session-bridge':
+                    return self.send(200, bridge.enqueue(request))
                 if not isinstance(request, dict) or request.get('action') not in WEB_ACTIONS:
                     raise ValueError('action not available from browser')
                 if type(request.get('revision')) is not int:
@@ -65,14 +78,14 @@ def make_server(store, port):
 
         def log_message(self, *_args):
             pass
-    return ThreadingHTTPServer(('127.0.0.1', port), Handler)
+    return ThreadingHTTPServer((host, port), Handler)
 
 
-def serve(directory, port):
+def serve(directory, port, host="127.0.0.1"):
     store = Store(directory)
     store.read()
-    server = make_server(store, port)
-    print(f'Workflow: http://127.0.0.1:{server.server_port}', flush=True)
+    server = make_server(store, port, host)
+    print(f'Workflow: http://{host}:{server.server_port}', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

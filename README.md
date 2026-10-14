@@ -146,6 +146,11 @@ JSON
 ```bash
 python3 -m unittest discover -s tests -v
 node --check workflow/static/app.js  # Node가 설치된 경우 JavaScript 구문 검사
+
+# 선택: Node 22+와 Chromium이 있는 환경의 실제 브라우저 검사
+CHROME_BINARY=/path/to/chromium \
+WORKFLOW_BROWSER_OUTPUT=/tmp/workflow-browser-evidence \
+node tests/browser-smoke.mjs
 ```
 
 테스트는 임시 작업공간을 생성하고 계획 사이클/누락 참조, revision 충돌, 동시 기록, 실제 명령 성공·실패, 댓글 처리 gate, 새 후속 의견, 읽음과 처리 분리, 이모지 인용, 과거 문서/작성 세션 보존을 검사합니다. socket 없는 HTTP handler 검사도 수행합니다. 실제 TCP HTTP 통합 검사는 로컬 socket 생성이 가능한 환경에서만 실행됩니다. 환경이 socket을 막으면 skip으로 표시되며 HTTP 검증 성공으로 보고하지 않습니다.

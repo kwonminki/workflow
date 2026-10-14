@@ -111,7 +111,8 @@ class HTTPTests(unittest.TestCase):
         req=Request(self.base+path,data=json.dumps(body).encode() if body is not None else None,headers=headers or {})
         try:
             with urlopen(req,timeout=5) as r:return r.status,r.read(),r.headers
-        except HTTPError as r:return r.code,r.read(),r.headers
+        except HTTPError as r:
+            with r:return r.code,r.read(),r.headers
     def test_get_path_boundary(self):
         self.assertEqual(self.request('/api/state')[0],200);self.assertEqual(self.request('/../../etc/passwd')[0],404)
         self.assertEqual(self.request('/state.json')[0],404);self.assertEqual(self.request('/')[0],200)
